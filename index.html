@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uber Driver Screen Clone</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #121212;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+        }
+
+        /* Mockup Layar HP */
+        .phone-container {
+            width: 360px;
+            height: 740px;
+            background-color: #0b0b0c;
+            border-radius: 40px;
+            border: 8px solid #2c2c2e;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Status Bar Atas */
+        .status-bar {
+            padding: 20px 30px 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 10;
+        }
+
+        /* Area Peta SVG */
+        .map-area {
+            flex: 1;
+            position: relative;
+            width: 100%;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Pin Penjemputan (Titik Awal) */
+        .pickup-pin {
+            position: absolute;
+            left: 60px;
+            bottom: 160px;
+            width: 20px;
+            height: 20px;
+            background-color: #3498db;
+            border: 4px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, 50%);
+            z-index: 2;
+        }
+
+        /* Efek Pulse Burst saat Mobil Sampai */
+        .pickup-pin.pulse::after {
+            content: '';
+            position: absolute;
+            top: -4px;
+            left: -4px;
+            width: 20px;
+            height: 20px;
+            border: 4px solid #3498db;
+            border-radius: 50%;
+            animation: burst 1.2s ease-out infinite;
+        }
+
+        @keyframes burst {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(3);
+                opacity: 0;
+            }
+        }
+
+        /* Mobil Bergerak */
+        .car-icon {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            /* Menggunakan emoji mobil, bisa diganti gambar/SVG */
+            font-size: 24px; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 3;
+            /* Titik jangkar di tengah ikon */
+            transform-origin: center; 
+            /* Sembunyikan sebelum animasi mulai dihitung JS */
+            opacity: 0; 
+        }
+
+        /* Panel Status Bawah */
+        .bottom-panel {
+            background-color: #1c1c1e;
+            padding: 25px;
+            border-top-left-radius: 24px;
+            border-top-right-radius: 24px;
+            z-index: 10;
+            text-align: center;
+        }
+
+        .status-pill {
+            background-color: #06c270;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 30px;
+            display: inline-block;
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 10px;
+            transition: background-color 0.3s;
+        }
+
+        .status-pill.arrived {
+            background-color: #3498db;
+        }
+
+        .eta-text {
+            font-size: 14px;
+            color: #a1a1aa;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="phone-container">
+        <div class="status-bar">
+            <span>11:41</span>
+            <span>5G 🔋</span>
+        </div>
+
+        <div class="map-area">
+            <svg viewBox="0 0 360 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path id="route-path" d="M 280 100 C 230 150, 150 220, 60 340" stroke="#f1c40f" stroke-width="4" stroke-linecap="round"/>
+                
+                <circle cx="280" cy="100" r="8" fill="#f1c40f" />
+            </svg>
+
+            <div id="car" class="car-icon">🚗</div>
+
+            <div id="pickup" class="pickup-pin"></div>
+        </div>
+
+        <div class="bottom-panel">
+            <div id="pill" class="status-pill">Perjalanan Menuju Anda</div>
+            <div id="eta" class="eta-text">Tiba dalam 5 mnt</div>
+        </div>
+    </div>
+
+    <script>
+        const path = document.getElementById('route-path');
+        const car = document.getElementById('car');
+        const pickup = document.getElementById('pickup');
+        const pill = document.getElementById('pill');
+        const eta = document.getElementById('eta');
+
+        // Mengambil total panjang jalur SVG
+        const pathLength = path.getTotalLength();
+        
+        let progress = 0; // Dimulai dari 0 (atas) ke 1 (bawah/tujuan)
+        const speed = 0.002; // Mengatur kecepatan jalan mobil
+
+        function animate() {
+            if (progress <= 1) {
+                // Mendapatkan koordinat (x, y) pada titik tertentu di sepanjang jalur
+                // Kita balik jalannya dari atas (jarak penuh) ke bawah (0)
+                const currentLength = pathLength * (1 - progress);
+                const point = path.getPointAtLength(currentLength);
+                
+                // Cari titik sedikit di depannya untuk menghitung sudut rotasi (kemiringan mobil)
+                const nextPoint = path.getPointAtLength(Math.max(0, currentLength - 2));
+                const angle = Math.atan2(nextPoint.y - point.y, nextPoint.x - point.x) * 100 / Math.PI;
+
+                // Posisikan mobil tepat di atas koordinat jalur
+                car.style.opacity = "1";
+                car.style.left = `${point.x - 16}px`; // dikurang setengah lebar ikon
+                car.style.top = `${point.y - 16}px`;  // dikurang setengah tinggi ikon
+                car.style.transform = `rotate(${angle + 90}deg)`; // +90 derajat menyesuaikan arah emoji
+
+                // Hitung Mundur ETA Palsu
+                const minutesLeft = Math.ceil((1 - progress) * 5);
+                if(minutesLeft > 0) {
+                    eta.innerText = `Tiba dalam ${minutesLeft} mnt`;
+                }
+
+                progress += speed;
+                requestAnimationFrame(animate);
+            } else {
+                // Ketika mobil sampai di tujuan (Pin Biru)
+                pickup.classList.add('pulse');
+                pill.innerText = "Sudah Sampai!";
+                pill.classList.add('arrived');
+                eta.innerText = "Pengemudi menunggu di luar";
+                
+                // Efek getar palsu di browser (jika didukung HP)
+                if (navigator.vibrate) {
+                    navigator.vibrate([100, 50, 100]);
+                }
+            }
+        }
+
+        // Jalankan animasi setelah halaman dimuat
+        window.onload = () => {
+            setTimeout(animate, 1000); // delay 1 detik sebelum jalan
+        };
+    </script>
+</body>
+</html>
